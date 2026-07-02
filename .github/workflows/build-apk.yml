@@ -13,20 +13,28 @@ jobs:
       - name: Checkout files
         uses: actions/checkout@v4
 
-      - name: Setup Java
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      - name: Setup Android
-        uses: android-actions/setup-android@v3
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Create Android project
         run: |
           mkdir -p app/src/main/java/com/starchat/app
           mkdir -p app/src/main/assets
-          cp -r index.html app.js style.css manifest.json logo.png firebase-messaging-sw.js assets app/src/main/assets/ || true
+          mkdir -p app/src/main/res/values
+
+          cp index.html app/src/main/assets/ || true
+          cp app.js app/src/main/assets/ || true
+          cp style.css app/src/main/assets/ || true
+          cp manifest.json app/src/main/assets/ || true
+          cp logo.png app/src/main/assets/ || true
+          cp firebase-messaging-sw.js app/src/main/assets/ || true
+          cp -r assets app/src/main/assets/ || true
 
           cat > settings.gradle <<'EOF'
           pluginManagement {
@@ -36,8 +44,14 @@ jobs:
                   gradlePluginPortal()
               }
           }
-          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories{ google(); mavenCentral() } }
-          rootProject.name='StarChat'
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = 'StarChat'
           include ':app'
           EOF
 
@@ -48,7 +62,9 @@ jobs:
           EOF
 
           cat > app/build.gradle <<'EOF'
-          plugins { id 'com.android.application' }
+          plugins {
+              id 'com.android.application'
+          }
 
           android {
               namespace 'com.starchat.app'
@@ -64,11 +80,21 @@ jobs:
           }
           EOF
 
+          cat > app/src/main/res/values/styles.xml <<'EOF'
+          <resources>
+              <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+                  <item name="android:windowNoTitle">true</item>
+                  <item name="android:windowActionBar">false</item>
+              </style>
+          </resources>
+          EOF
+
           cat > app/src/main/AndroidManifest.xml <<'EOF'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET"/>
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
               <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+              <uses-permission android:name="android.permission.VIBRATE"/>
 
               <application
                   android:theme="@style/AppTheme"
@@ -86,28 +112,17 @@ jobs:
           </manifest>
           EOF
 
-          mkdir -p app/src/main/res/values
-          cat > app/src/main/res/values/styles.xml <<'EOF'
-          <resources>
-              <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
-                  <item name="android:windowNoTitle">true</item>
-                  <item name="android:windowActionBar">false</item>
-                  <item name="android:windowFullscreen">false</item>
-              </style>
-          </resources>
-          EOF
-
           cat > app/src/main/java/com/starchat/app/MainActivity.java <<'EOF'
           package com.starchat.app;
 
-          import android.Manifest;
           import android.os.Bundle;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
-          import androidx.appcompat.app.AppCompatActivity;
+          import android.webkit.WebChromeClient;
+          import android.app.Activity;
 
-          public class MainActivity extends AppCompatActivity {
+          public class MainActivity extends Activity {
               WebView webView;
 
               @Override
@@ -126,24 +141,23 @@ jobs:
                   s.setMediaPlaybackRequiresUserGesture(false);
 
                   webView.setWebViewClient(new WebViewClient());
+                  webView.setWebChromeClient(new WebChromeClient());
                   webView.loadUrl("file:///android_asset/index.html");
               }
 
               @Override
               public void onBackPressed() {
-                  if (webView != null && webView.canGoBack()) webView.goBack();
-                  else super.onBackPressed();
+                  if (webView != null && webView.canGoBack()) {
+                      webView.goBack();
+                  } else {
+                      super.onBackPressed();
+                  }
               }
           }
           EOF
 
-          sed -i "s/plugins { id 'com.android.application' }/plugins { id 'com.android.application' }/" app/build.gradle
-          sed -i "1i buildscript { repositories { google(); mavenCentral() } dependencies { classpath 'androidx.appcompat:appcompat:1.7.0' } }" build.gradle
-
       - name: Build APK
-        run: |
-          chmod +x ./gradlew || true
-          gradle assembleDebug
+        run: gradle assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
