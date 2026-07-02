@@ -27,6 +27,12 @@ jobs:
           mkdir -p app/src/main/java/com/starchat/app
           mkdir -p app/src/main/assets
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
 
           cp index.html app/src/main/assets/ || true
           cp app.js app/src/main/assets/ || true
@@ -35,6 +41,16 @@ jobs:
           cp logo.png app/src/main/assets/ || true
           cp firebase-messaging-sw.js app/src/main/assets/ || true
           cp -r assets app/src/main/assets/ || true
+
+          sudo apt-get update
+          sudo apt-get install -y imagemagick
+
+          convert logo.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
+          convert logo.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
+          convert logo.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          convert logo.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          convert logo.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          convert logo.png -resize 220x220 app/src/main/res/drawable/splash_logo.png
 
           cat > settings.gradle <<'EOF'
           pluginManagement {
@@ -80,11 +96,21 @@ jobs:
           }
           EOF
 
+          cat > app/src/main/res/values/colors.xml <<'EOF'
+          <resources>
+              <color name="star_dark">#020916</color>
+              <color name="star_blue">#053B78</color>
+              <color name="star_gold">#FFD76B</color>
+          </resources>
+          EOF
+
           cat > app/src/main/res/values/styles.xml <<'EOF'
           <resources>
               <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
                   <item name="android:windowNoTitle">true</item>
                   <item name="android:windowActionBar">false</item>
+                  <item name="android:windowFullscreen">false</item>
+                  <item name="android:windowBackground">@color/star_dark</item>
               </style>
           </resources>
           EOF
@@ -99,6 +125,8 @@ jobs:
               <application
                   android:theme="@style/AppTheme"
                   android:label="Star Chat"
+                  android:icon="@mipmap/ic_launcher"
+                  android:roundIcon="@mipmap/ic_launcher"
                   android:usesCleartextTraffic="true">
                   <activity
                       android:name=".MainActivity"
@@ -115,22 +143,85 @@ jobs:
           cat > app/src/main/java/com/starchat/app/MainActivity.java <<'EOF'
           package com.starchat.app;
 
+          import android.app.Activity;
           import android.os.Bundle;
+          import android.os.Handler;
+          import android.webkit.WebChromeClient;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
-          import android.webkit.WebChromeClient;
-          import android.app.Activity;
+          import android.widget.FrameLayout;
+          import android.widget.ImageView;
+          import android.widget.LinearLayout;
+          import android.widget.TextView;
+          import android.graphics.Color;
+          import android.view.Gravity;
+          import android.view.ViewGroup;
 
           public class MainActivity extends Activity {
               WebView webView;
+              FrameLayout root;
 
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
 
+                  root = new FrameLayout(this);
+                  setContentView(root);
+
+                  showSplash();
+
+                  new Handler().postDelayed(new Runnable() {
+                      @Override
+                      public void run() {
+                          openWebView();
+                      }
+                  }, 2200);
+              }
+
+              void showSplash() {
+                  LinearLayout splash = new LinearLayout(this);
+                  splash.setOrientation(LinearLayout.VERTICAL);
+                  splash.setGravity(Gravity.CENTER);
+                  splash.setBackgroundColor(Color.rgb(2, 9, 22));
+
+                  ImageView logo = new ImageView(this);
+                  logo.setImageResource(getResources().getIdentifier("splash_logo", "drawable", getPackageName()));
+                  LinearLayout.LayoutParams logoParams = new LinearLayout.LayoutParams(260, 260);
+                  logo.setLayoutParams(logoParams);
+
+                  TextView title = new TextView(this);
+                  title.setText("Star Chat");
+                  title.setTextColor(Color.WHITE);
+                  title.setTextSize(30);
+                  title.setGravity(Gravity.CENTER);
+                  title.setTypeface(null, 1);
+
+                  TextView sub = new TextView(this);
+                  sub.setText("Connect • Chat • Earn");
+                  sub.setTextColor(Color.rgb(255, 215, 107));
+                  sub.setTextSize(14);
+                  sub.setGravity(Gravity.CENTER);
+                  sub.setTypeface(null, 1);
+
+                  splash.addView(logo);
+                  splash.addView(title);
+                  splash.addView(sub);
+
+                  root.addView(splash, new FrameLayout.LayoutParams(
+                      ViewGroup.LayoutParams.MATCH_PARENT,
+                      ViewGroup.LayoutParams.MATCH_PARENT
+                  ));
+              }
+
+              void openWebView() {
+                  root.removeAllViews();
+
                   webView = new WebView(this);
-                  setContentView(webView);
+                  root.addView(webView, new FrameLayout.LayoutParams(
+                      ViewGroup.LayoutParams.MATCH_PARENT,
+                      ViewGroup.LayoutParams.MATCH_PARENT
+                  ));
 
                   WebSettings s = webView.getSettings();
                   s.setJavaScriptEnabled(true);
