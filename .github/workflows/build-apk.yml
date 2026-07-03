@@ -1,4 +1,4 @@
-name: Build Star Chat APK
+name: Build Star Chat APK With AdMob
 
 on:
   workflow_dispatch:
@@ -10,29 +10,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout files
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Java 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v4
 
-      - name: Create Android project
+      - name: Create Android AdMob Project
         run: |
           mkdir -p app/src/main/java/com/starchat/app
           mkdir -p app/src/main/assets
           mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/drawable
-          mkdir -p app/src/main/res/mipmap-hdpi
-          mkdir -p app/src/main/res/mipmap-mdpi
-          mkdir -p app/src/main/res/mipmap-xhdpi
-          mkdir -p app/src/main/res/mipmap-xxhdpi
-          mkdir -p app/src/main/res/mipmap-xxxhdpi
+          mkdir -p app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi
 
           cp index.html app/src/main/assets/ || true
           cp app.js app/src/main/assets/ || true
@@ -44,30 +36,21 @@ jobs:
 
           sudo apt-get update
           sudo apt-get install -y imagemagick
-
           convert logo.png -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
           convert logo.png -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
           convert logo.png -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
           convert logo.png -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           convert logo.png -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          convert logo.png -resize 220x220 app/src/main/res/drawable/splash_logo.png
 
           cat > settings.gradle <<'EOF'
           pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
           }
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
+              repositories { google(); mavenCentral() }
           }
-          rootProject.name = 'StarChat'
+          rootProject.name='StarChat'
           include ':app'
           EOF
 
@@ -78,9 +61,7 @@ jobs:
           EOF
 
           cat > app/build.gradle <<'EOF'
-          plugins {
-              id 'com.android.application'
-          }
+          plugins { id 'com.android.application' }
 
           android {
               namespace 'com.starchat.app'
@@ -90,18 +71,14 @@ jobs:
                   applicationId 'com.starchat.app'
                   minSdk 23
                   targetSdk 35
-                  versionCode 1
-                  versionName '1.0'
+                  versionCode 2
+                  versionName '1.1'
               }
           }
-          EOF
 
-          cat > app/src/main/res/values/colors.xml <<'EOF'
-          <resources>
-              <color name="star_dark">#020916</color>
-              <color name="star_blue">#053B78</color>
-              <color name="star_gold">#FFD76B</color>
-          </resources>
+          dependencies {
+              implementation 'com.google.android.gms:play-services-ads:23.6.0'
+          }
           EOF
 
           cat > app/src/main/res/values/styles.xml <<'EOF'
@@ -109,8 +86,7 @@ jobs:
               <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
                   <item name="android:windowNoTitle">true</item>
                   <item name="android:windowActionBar">false</item>
-                  <item name="android:windowFullscreen">false</item>
-                  <item name="android:windowBackground">@color/star_dark</item>
+                  <item name="android:windowBackground">#020916</item>
               </style>
           </resources>
           EOF
@@ -128,6 +104,11 @@ jobs:
                   android:icon="@mipmap/ic_launcher"
                   android:roundIcon="@mipmap/ic_launcher"
                   android:usesCleartextTraffic="true">
+
+                  <meta-data
+                      android:name="com.google.android.gms.ads.APPLICATION_ID"
+                      android:value="ca-app-pub-2795375653009372~8956273123"/>
+
                   <activity
                       android:name=".MainActivity"
                       android:exported="true">
@@ -146,82 +127,59 @@ jobs:
           import android.app.Activity;
           import android.os.Bundle;
           import android.os.Handler;
+          import android.view.Gravity;
+          import android.webkit.JavascriptInterface;
           import android.webkit.WebChromeClient;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
           import android.widget.FrameLayout;
-          import android.widget.ImageView;
           import android.widget.LinearLayout;
-          import android.widget.TextView;
-          import android.graphics.Color;
-          import android.view.Gravity;
-          import android.view.ViewGroup;
+
+          import com.google.android.gms.ads.AdRequest;
+          import com.google.android.gms.ads.AdSize;
+          import com.google.android.gms.ads.AdView;
+          import com.google.android.gms.ads.MobileAds;
+          import com.google.android.gms.ads.interstitial.InterstitialAd;
+          import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback;
+          import com.google.android.gms.ads.rewarded.RewardedAd;
+          import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
+          import com.google.android.gms.ads.LoadAdError;
 
           public class MainActivity extends Activity {
               WebView webView;
               FrameLayout root;
+              AdView bannerAd;
+              InterstitialAd interstitialAd;
+              RewardedAd rewardedAd;
+
+              final String BANNER_ID = "ca-app-pub-2795375653009372/9601507474";
+              final String INTERSTITIAL_ID = "ca-app-pub-2795375653009372/6629492681";
+              final String REWARDED_ID = "ca-app-pub-2795375653009372/9064084337";
 
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
 
+                  MobileAds.initialize(this, initializationStatus -> {});
                   root = new FrameLayout(this);
                   setContentView(root);
 
-                  showSplash();
+                  openWebView();
+                  loadBanner();
+                  loadInterstitial();
+                  loadRewarded();
 
-                  new Handler().postDelayed(new Runnable() {
-                      @Override
-                      public void run() {
-                          openWebView();
-                      }
-                  }, 2200);
-              }
-
-              void showSplash() {
-                  LinearLayout splash = new LinearLayout(this);
-                  splash.setOrientation(LinearLayout.VERTICAL);
-                  splash.setGravity(Gravity.CENTER);
-                  splash.setBackgroundColor(Color.rgb(2, 9, 22));
-
-                  ImageView logo = new ImageView(this);
-                  logo.setImageResource(getResources().getIdentifier("splash_logo", "drawable", getPackageName()));
-                  LinearLayout.LayoutParams logoParams = new LinearLayout.LayoutParams(260, 260);
-                  logo.setLayoutParams(logoParams);
-
-                  TextView title = new TextView(this);
-                  title.setText("Star Chat");
-                  title.setTextColor(Color.WHITE);
-                  title.setTextSize(30);
-                  title.setGravity(Gravity.CENTER);
-                  title.setTypeface(null, 1);
-
-                  TextView sub = new TextView(this);
-                  sub.setText("Connect • Chat • Earn");
-                  sub.setTextColor(Color.rgb(255, 215, 107));
-                  sub.setTextSize(14);
-                  sub.setGravity(Gravity.CENTER);
-                  sub.setTypeface(null, 1);
-
-                  splash.addView(logo);
-                  splash.addView(title);
-                  splash.addView(sub);
-
-                  root.addView(splash, new FrameLayout.LayoutParams(
-                      ViewGroup.LayoutParams.MATCH_PARENT,
-                      ViewGroup.LayoutParams.MATCH_PARENT
-                  ));
+                  new Handler().postDelayed(() -> showInterstitial(), 8000);
               }
 
               void openWebView() {
-                  root.removeAllViews();
-
                   webView = new WebView(this);
-                  root.addView(webView, new FrameLayout.LayoutParams(
-                      ViewGroup.LayoutParams.MATCH_PARENT,
-                      ViewGroup.LayoutParams.MATCH_PARENT
-                  ));
+                  FrameLayout.LayoutParams webParams = new FrameLayout.LayoutParams(
+                      FrameLayout.LayoutParams.MATCH_PARENT,
+                      FrameLayout.LayoutParams.MATCH_PARENT
+                  );
+                  root.addView(webView, webParams);
 
                   WebSettings s = webView.getSettings();
                   s.setJavaScriptEnabled(true);
@@ -233,16 +191,92 @@ jobs:
 
                   webView.setWebViewClient(new WebViewClient());
                   webView.setWebChromeClient(new WebChromeClient());
+                  webView.addJavascriptInterface(new AdsBridge(), "AndroidAds");
                   webView.loadUrl("file:///android_asset/index.html");
+              }
+
+              void loadBanner() {
+                  bannerAd = new AdView(this);
+                  bannerAd.setAdUnitId(BANNER_ID);
+                  bannerAd.setAdSize(AdSize.BANNER);
+
+                  FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                      FrameLayout.LayoutParams.WRAP_CONTENT,
+                      FrameLayout.LayoutParams.WRAP_CONTENT
+                  );
+                  params.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+
+                  root.addView(bannerAd, params);
+                  bannerAd.loadAd(new AdRequest.Builder().build());
+              }
+
+              void loadInterstitial() {
+                  InterstitialAd.load(this, INTERSTITIAL_ID, new AdRequest.Builder().build(),
+                      new InterstitialAdLoadCallback() {
+                          @Override
+                          public void onAdLoaded(InterstitialAd ad) {
+                              interstitialAd = ad;
+                          }
+
+                          @Override
+                          public void onAdFailedToLoad(LoadAdError error) {
+                              interstitialAd = null;
+                          }
+                      });
+              }
+
+              void showInterstitial() {
+                  if (interstitialAd != null) {
+                      interstitialAd.show(this);
+                      interstitialAd = null;
+                      loadInterstitial();
+                  }
+              }
+
+              void loadRewarded() {
+                  RewardedAd.load(this, REWARDED_ID, new AdRequest.Builder().build(),
+                      new RewardedAdLoadCallback() {
+                          @Override
+                          public void onAdLoaded(RewardedAd ad) {
+                              rewardedAd = ad;
+                          }
+
+                          @Override
+                          public void onAdFailedToLoad(LoadAdError error) {
+                              rewardedAd = null;
+                          }
+                      });
+              }
+
+              void showRewarded() {
+                  if (rewardedAd != null) {
+                      rewardedAd.show(this, rewardItem -> {
+                          webView.post(() -> webView.evaluateJavascript(
+                              "window.dispatchEvent(new CustomEvent('adRewardEarned',{detail:{coins:10}}));",
+                              null
+                          ));
+                      });
+                      rewardedAd = null;
+                      loadRewarded();
+                  }
+              }
+
+              public class AdsBridge {
+                  @JavascriptInterface
+                  public void showInterstitialAd() {
+                      runOnUiThread(() -> showInterstitial());
+                  }
+
+                  @JavascriptInterface
+                  public void showRewardedAd() {
+                      runOnUiThread(() -> showRewarded());
+                  }
               }
 
               @Override
               public void onBackPressed() {
-                  if (webView != null && webView.canGoBack()) {
-                      webView.goBack();
-                  } else {
-                      super.onBackPressed();
-                  }
+                  if (webView != null && webView.canGoBack()) webView.goBack();
+                  else super.onBackPressed();
               }
           }
           EOF
@@ -253,5 +287,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: StarChat-debug-apk
+          name: StarChat-AdMob-APK
           path: app/build/outputs/apk/debug/app-debug.apk
